@@ -1,5 +1,5 @@
 -- Made by Rukuu (2y)
--- DiscordL goc2v
+-- Discord: goc2v
 
 --// Services
 local Players = game:GetService("Players")
