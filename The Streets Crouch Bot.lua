@@ -1,135 +1,121 @@
--- Made by Rukuu (2y)
--- Discord: goc2v
-
---// Services
+--// Services                                                                  --stupid upd made by Rukuu [discord: goc2v]
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TextChatService = game:GetService("TextChatService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local StarterGui = game:GetService("StarterGui")
+local TextChatService = game:GetService("TextChatService")
 
 local lp = Players.LocalPlayer
 
--- Notify script execution
+--// Notify once on script load
 StarterGui:SetCore("SendNotification", {
-    Title = "Crouch Bot Status",
-    Text = "Crouch Bot Script Loaded!",
-    Duration = 5,
+	Title = "Crouch Bot",
+	Text = "Loaded. Say 'start' to begin.",
+	Duration = 3
 })
 
-local function sendChatMessage(msg)
-    msg = tostring(msg)
-    local isLegacy = TextChatService.ChatVersion == Enum.ChatVersion.LegacyChatService
+--// State
+local isActive: boolean = false
+local isSpamMode: boolean = false
+local crouchSpeed: number = 0.2
+local runningLoop: boolean = false
 
-    if isLegacy then
-        local chatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-        local sayMsg = chatEvents and chatEvents:FindFirstChild("SayMessageRequest")
-        if sayMsg then
-            sayMsg:FireServer(msg, "All")
-        end
-    else
-        local channel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if channel then
-            channel:SendAsync(msg)
-        end
-    end
+--// Crouch Loop
+local function crouchBotLoop(): nil
+	if runningLoop then return end
+	runningLoop = true
+
+	while isActive do
+		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+		task.wait(0.05)
+		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+
+		if not isActive then break end
+
+		if isSpamMode then
+			task.wait(0.05)
+		else
+			local t = tick()
+			while tick() - t < crouchSpeed do
+				if not isActive then break end
+				task.wait(0.01)
+			end
+		end
+	end
+
+	runningLoop = false
 end
 
-local function sendCommandList()
-    sendChatMessage("Commands: start, stop, speed [value], spam, normal, help")
+--// Commands
+local function startCommand(): nil
+	if isActive then return end
+	isActive = true
+	isSpamMode = false
+	task.spawn(crouchBotLoop)
 end
 
-local isActive = false
-local spamMode = false
-local speedDelay = 0.2
-local crouchCoroutine
-
-local function crouchLoop()
-    while isActive do
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
-        task.wait(0.05)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
-
-        if spamMode then
-            task.wait() -- spam (0 seconds)
-        else
-            task.wait(speedDelay)
-        end
-    end
+local function stopCommand(): nil
+	isActive = false
+	isSpamMode = false
+	VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
 end
 
-local function startCrouchBot()
-    if isActive then
-        sendChatMessage("Crouch Bot is already running!")
-        return
-    end
-
-    isActive = true
-
-    sendChatMessage("Crouch Bot Made By 2y/Rukuu")
-    task.wait(2)
-    sendChatMessage("bluey: goc2v")
-    task.wait(1)
-    sendCommandList()
-
-    crouchCoroutine = coroutine.create(crouchLoop)
-    coroutine.resume(crouchCoroutine)
+local function speedCommand(value: string): nil
+	local speedNum = tonumber(value)
+	if speedNum and speedNum > 0 then
+		crouchSpeed = speedNum
+		isSpamMode = false
+	end
 end
 
-local function stopCrouchBot()
-    if not isActive and not spamMode then
-        sendChatMessage("Crouch Bot is not running!")
-        return
-    end
-
-    -- Stop crouching and disable spam mode
-    isActive = false
-    spamMode = false
-
-    sendChatMessage("Crouch Bot Stopped (All modes disabled)")
-    -- Coroutine will stop naturally because isActive = false
+local function spamCommand(): nil
+	if not isActive then
+		isActive = true
+		isSpamMode = true
+		task.spawn(crouchBotLoop)
+	elseif not isSpamMode then
+		isSpamMode = true
+	end
 end
 
-local function normalMode()
-    if not isActive then
-        isActive = true
-        spamMode = false
-        crouchCoroutine = coroutine.create(crouchLoop)
-        coroutine.resume(crouchCoroutine)
-        sendChatMessage("Crouch Bot started in Normal Mode (speed: " .. tostring(speedDelay) .. ")")
-    else
-        spamMode = false
-        sendChatMessage("Crouch Bot switched to Normal Mode (speed: " .. tostring(speedDelay) .. ")")
-    end
+local function normalCommand(): nil
+	if not isActive then
+		isActive = true
+		isSpamMode = false
+		task.spawn(crouchBotLoop)
+	elseif isSpamMode then
+		isSpamMode = false
+	end
 end
 
-lp.Chatted:Connect(function(msg)
-    local command = msg:lower()
+--// Command Handler
+local function processCommand(msg: string): nil
+	msg = msg:lower():gsub("^%s+", ""):gsub("%s+$", "")
+	if msg == "start" then
+		startCommand()
+	elseif msg == "stop" then
+		stopCommand()
+	elseif msg == "spam" then
+		spamCommand()
+	elseif msg == "normal" then
+		normalCommand()
+	elseif msg:match("^speed%s+[%d%.]+$") then
+		local val = msg:match("speed%s+([%d%.]+)")
+		if val then speedCommand(val) end
+	end
+end
 
-    if command == "start" then
-        startCrouchBot()
-    elseif command == "stop" then
-        stopCrouchBot()
-    elseif command:match("^speed %d+%.?%d*$") then
-        local val = tonumber(command:match("%d+%.?%d*"))
-        if val then
-            speedDelay = val
-            spamMode = false
-            sendChatMessage("Crouch speed set to " .. tostring(val))
-        else
-            sendChatMessage("Invalid speed value!")
-        end
-    elseif command == "spam" then
-        spamMode = true
-        isActive = true -- make sure crouching is active
-        if not crouchCoroutine or coroutine.status(crouchCoroutine) == "dead" then
-            crouchCoroutine = coroutine.create(crouchLoop)
-            coroutine.resume(crouchCoroutine)
-        end
-        sendChatMessage("Spam mode enabled")
-    elseif command == "normal" then
-        normalMode()
-    elseif command == "help" then
-        sendCommandList()
-    end
-end)
+--// Chat Listener
+local function setupChatListener(): nil
+	if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+		TextChatService.OnIncomingMessage = function(msg)
+			if msg.TextSource and Players:GetPlayerByUserId(msg.TextSource.UserId) == lp then
+				processCommand(msg.Text)
+			end
+		end
+	else
+		lp.Chatted:Connect(processCommand)
+	end
+end
+
+setupChatListener()
